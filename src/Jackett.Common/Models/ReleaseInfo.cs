@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Jackett.Common.Indexers;
 using Newtonsoft.Json;
 
@@ -66,7 +67,7 @@ namespace Jackett.Common.Models
             Link = copyFrom.Link;
             Details = copyFrom.Details;
             PublishDate = copyFrom.PublishDate;
-            Category = copyFrom.Category;
+            Category = copyFrom.Category?.ToList();
             Size = copyFrom.Size;
             Files = copyFrom.Files;
             Grabs = copyFrom.Grabs;
@@ -78,9 +79,9 @@ namespace Jackett.Common.Models
             TVMazeId = copyFrom.TVMazeId;
             TraktId = copyFrom.TraktId;
             DoubanId = copyFrom.DoubanId;
-            Genres = copyFrom.Genres;
-            Languages = copyFrom.Languages;
-            Subs = copyFrom.Subs;
+            Genres = copyFrom.Genres?.ToList();
+            Languages = copyFrom.Languages?.ToList();
+            Subs = copyFrom.Subs?.ToList();
             Year = copyFrom.Year;
             Author = copyFrom.Author;
             BookTitle = copyFrom.BookTitle;

@@ -14,6 +14,10 @@ var api = {
 	    return $.get(this.getApiPath("indexers"), callback);
 	},
 
+    getConfiguredIndexers: function(callback) {
+        return $.get(this.getApiPath("indexers"), { configured: true }, callback);
+    },
+
 	getServerConfig: function(callback) {
 	    return $.get(this.getApiPath("server", "config"), callback);
 	},

@@ -8,6 +8,7 @@ using Jackett.Common.Exceptions;
 using Jackett.Common.Extensions;
 using Jackett.Common.Models;
 using Jackett.Common.Models.IndexerConfig;
+using Jackett.Common.Services;
 using Jackett.Common.Services.Interfaces;
 using Jackett.Common.Utils;
 using Jackett.Common.Utils.Clients;
@@ -22,6 +23,7 @@ namespace Jackett.Common.Indexers
 {
     public abstract class BaseIndexer : IIndexer
     {
+        private readonly Dictionary<string, Task<IndexerResult>> _pendingQueries = new();
         public virtual string Id { get; protected set; }
         public virtual string[] Replaces { get; protected set; } = Array.Empty<string>();
         public virtual string Name { get; protected set; }
@@ -369,6 +371,55 @@ namespace Jackett.Common.Indexers
                     return new IndexerResult(this, cachedReleases, 0, true);
             }
 
+            if (!queryCopy.Cache || queryCopy.IsTest)
+                return await PerformQueryAndCache(queryCopy);
+
+            var key = CacheService.GetQueryHash(queryCopy);
+            Task<IndexerResult> pending;
+            TaskCompletionSource<IndexerResult> completion = null;
+            lock (_pendingQueries)
+            {
+                if (!_pendingQueries.TryGetValue(key, out pending))
+                {
+                    completion = new TaskCompletionSource<IndexerResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    pending = completion.Task;
+                    _pendingQueries.Add(key, pending);
+                }
+            }
+
+            if (completion != null)
+                _ = CompleteQuery(queryCopy, key, completion);
+
+            var result = await pending;
+            // Each API request owns its response: web indexers and proxy generation mutate releases.
+            return new IndexerResult(this, result.Releases.Select(r => (ReleaseInfo)r.Clone()).ToList(),
+                result.ElapsedTime, result.IsFromCache);
+        }
+
+        private async Task CompleteQuery(TorznabQuery query, string key, TaskCompletionSource<IndexerResult> completion)
+        {
+            try
+            {
+                // Another request may have populated the cache between the first lookup and registration.
+                var cached = cacheService.Search(this, query);
+                var result = cached != null
+                    ? new IndexerResult(this, cached, 0, true)
+                    : await PerformQueryAndCache(query);
+                completion.SetResult(result);
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+            finally
+            {
+                lock (_pendingQueries)
+                    _pendingQueries.Remove(key);
+            }
+        }
+
+        private async Task<IndexerResult> PerformQueryAndCache(TorznabQuery queryCopy)
+        {
             try
             {
                 var sw = new Stopwatch();

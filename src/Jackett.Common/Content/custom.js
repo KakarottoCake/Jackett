@@ -7,6 +7,8 @@ var unconfiguredIndexers = [];
 var configuredTags = [];
 var availableFilters = [];
 var currentFilter = null;
+var catalogRequest = null;
+var dashboardStarted = performance.now();
 
 $.fn.inView = function () {
     if (!this.length) return false;
@@ -161,9 +163,9 @@ function loadJackettSettings() {
 }
 
 function reloadIndexers() {
-    $('#filters').hide();
-    $('#indexers').hide();
-    api.getAllIndexers(function (data) {
+    $('#dashboard-status').text('Loading indexers…');
+    catalogRequest = null;
+    api.getConfiguredIndexers(function (data) {
         indexers = data;
         configuredIndexers = [];
         unconfiguredIndexers = [];
@@ -205,6 +207,11 @@ function reloadIndexers() {
 
         configuredTags = configuredIndexers.map(i => i.tags).reduce((a, g) => a.concat(g), []).filter((v, i, a) => a.indexOf(v) === i);
 
+        $('#dashboard-count').text(configuredIndexers.length);
+        $('#dashboard-cache').text($('#jackett-cache-enabled').prop('checked') ? 'Enabled' : 'Disabled');
+        $('#dashboard-status').text('Ready');
+        $('#dashboard-load').text(Math.round(performance.now() - dashboardStarted) + ' ms');
+
         configureFilters(configuredIndexers);
 
         displayFilteredIndexersList(configuredIndexers, currentFilter);
@@ -212,6 +219,7 @@ function reloadIndexers() {
         $('#indexers div.dataTables_filter input').focusWithoutScrolling();
         openSearchIfNecessary();
     }).fail(function () {
+        $('#dashboard-status').text('Connection failed');
         doNotify("Error loading indexers, request to Jackett server failed, is server running ?", "danger", "glyphicon glyphicon-alert");
     });
 }
@@ -308,7 +316,7 @@ function displayConfiguredIndexersList(indexers) {
 
     $('#indexers').empty();
     $('#indexers').append(indexersTable);
-    $('#indexers').fadeIn();
+    $('#indexers').show();
 }
 
 function displayUnconfiguredIndexersList() {
@@ -967,6 +975,9 @@ function clearNotifications() {
 }
 
 function updateReleasesRow(row) {
+    if ($(row).data('release-ready'))
+        return;
+    $(row).data('release-ready', true);
     var labels = $(row).find("span.release-labels");
     var TitleLink = $(row).find("td.Title > a");
     var IMDBId = $(row).data("imdb");
@@ -1255,6 +1266,7 @@ function setSavedPresets(presets) {
 
 function setSavePresetsButtonState(table, element, state = false) {
     var button = element.find("button[id=jackett-search-results-datatable_savepreset_button]")
+    button.off('click');
     if (state) {
         button.attr("class", "btn btn-danger btn-sm");
         button.on("click", function () {
@@ -1307,13 +1319,15 @@ $.fn.dataTable.ext.search = [
 function updateSearchResultTable(element, results) {
     var resultsTemplate = Handlebars.compile($("#jackett-search-results").text());
     element.html($(resultsTemplate(results)));
-    element.find('tr.jackett-search-results-row').each(function () {
-        updateReleasesRow(this);
-    });
     var settings = {
         "deadfilter": true
     };
     var datatable = element.find('table').DataTable({
+        drawCallback: function () {
+            this.api().rows({ page: 'current' }).nodes().each(function (row) {
+                updateReleasesRow(row);
+            });
+        },
         "fnStateSaveParams": function (oSettings, sValue) {
             sValue.search.search = ""; // don't save the search filter content
             sValue.deadfilter = settings.deadfilter;
@@ -1494,11 +1508,29 @@ function bindUIButtons() {
     });
 
     $('#jackett-add-indexer').click(function () {
-        $("#modals").empty();
-        displayUnconfiguredIndexersList();
-        addCheckOnCellClick();
-        $('#unconfigured-indexer-datatable tfoot tr').insertAfter($('#unconfigured-indexer-datatable thead tr'));
-        $('#unconfigured-indexer-datatable').DataTable().search('').columns().search('').draw();
+        var button = $(this);
+        button.prop('disabled', true).attr('aria-busy', 'true');
+        if (!catalogRequest) {
+            catalogRequest = api.getAllIndexers(function (data) {
+                unconfiguredIndexers = data.filter(i => !i.configured);
+                unconfiguredIndexers.forEach(function (item) {
+                    item.type_label = { public: 'success', private: 'danger', 'semi-private': 'warning' }[item.type] || 'default';
+                    item.mains_cats = [...new Set(item.caps.filter(c => c.ID < 100000).map(c => c.Name.split('/')[0]))].join(', ');
+                });
+            });
+        }
+        catalogRequest.done(function () {
+            $("#modals").empty();
+            displayUnconfiguredIndexersList();
+            addCheckOnCellClick();
+            $('#unconfigured-indexer-datatable tfoot tr').insertAfter($('#unconfigured-indexer-datatable thead tr'));
+            $('#unconfigured-indexer-datatable').DataTable().search('').columns().search('').draw();
+        }).fail(function () {
+            catalogRequest = null;
+            doNotify('Unable to load the indexer catalog. Try again.', 'danger', 'glyphicon glyphicon-alert');
+        }).always(function () {
+            button.prop('disabled', false).removeAttr('aria-busy');
+        });
     });
 
     $("#jackett-test-all").click(function () {
@@ -1518,14 +1550,16 @@ function bindUIButtons() {
             };
             var releaseDialog = $(releaseTemplate(item));
             var table = releaseDialog.find('table');
-            releaseDialog.find('tr.jackett-releases-row').each(function () {
-                updateReleasesRow(this);
-            });
             releaseDialog.on('hidden.bs.modal', function (e) {
                 $('#indexers div.dataTables_filter input').focusWithoutScrolling();
             });
 
             table.DataTable({
+                drawCallback: function () {
+                    this.api().rows({ page: 'current' }).nodes().each(function (row) {
+                        updateReleasesRow(row);
+                    });
+                },
                 "stateSave": true,
                 "stateDuration": 0,
                 "bAutoWidth": false,

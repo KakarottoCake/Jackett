@@ -151,7 +151,7 @@ namespace Jackett.Server
 
             app.UseRewriter(rewriteOptions);
 
-            app.UseStaticFiles();
+            app.UseStaticFiles(CachedStaticFiles());
 
             app.UseAuthentication();
 
@@ -188,7 +188,7 @@ namespace Jackett.Server
 
             app.UseRewriter(rewriteOptions);
 
-            app.UseStaticFiles();
+            app.UseStaticFiles(CachedStaticFiles());
 
             app.UseAuthentication();
 
@@ -200,6 +200,17 @@ namespace Jackett.Server
             app.UseEndpoints(endpoints => endpoints.MapControllers());
         }
 #endif
+
+        private static StaticFileOptions CachedStaticFiles() => new StaticFileOptions
+        {
+            OnPrepareResponse = context =>
+            {
+                // Versioned scripts and styles can be reused without another round trip.
+                var extension = Path.GetExtension(context.File.Name);
+                if ((extension == ".js" || extension == ".css") && context.Context.Request.Query.ContainsKey("changed"))
+                    context.Context.Response.Headers["Cache-Control"] = "public,max-age=31536000,immutable";
+            }
+        };
 
         private static void OnStarted()
         {

@@ -35,6 +35,7 @@ namespace Jackett.Common.Services
         private readonly Logger _logger;
         private readonly ServerConfig _serverConfig;
         private readonly Dictionary<string, TrackerCache> _cache = new();
+        private DateTime _nextPrune = DateTime.MinValue;
 
         public CacheService(Logger logger, ServerConfig serverConfig)
         {
@@ -52,6 +53,8 @@ namespace Jackett.Common.Services
             {
                 if (!IsCacheEnabled())
                     return;
+
+                PruneCacheIfDue();
 
                 if (!_cache.ContainsKey(indexer.Id))
                 {
@@ -84,19 +87,26 @@ namespace Jackett.Common.Services
 
         public List<ReleaseInfo> Search(IIndexer indexer, TorznabQuery query)
         {
+            if (query.IsTest)
+                return null;
+
+            var queryHash = GetQueryHash(query);
             lock (_cache)
             {
                 if (!IsCacheEnabled())
                     return null;
 
-                PruneCacheByTtl(); // remove expired results
+                PruneCacheIfDue();
 
-                if (!_cache.ContainsKey(indexer.Id))
+                if (!_cache.TryGetValue(indexer.Id, out var trackerCache))
                     return null;
 
-                var trackerCache = _cache[indexer.Id];
-                var queryHash = GetQueryHash(query);
-                var cacheHit = trackerCache.Queries.ContainsKey(queryHash);
+                var cacheHit = trackerCache.Queries.TryGetValue(queryHash, out var cachedQuery);
+                if (cacheHit && cachedQuery.Created < DateTime.Now.AddSeconds(-_serverConfig.CacheTtl))
+                {
+                    trackerCache.Queries.Remove(queryHash);
+                    cacheHit = false;
+                }
 
                 if (_logger.IsDebugEnabled)
                     _logger.Debug($"CACHE Search / Indexer: {trackerCache.TrackerId} / CacheHit: {cacheHit} / Query: {GetSerializedQuery(query)}");
@@ -104,10 +114,11 @@ namespace Jackett.Common.Services
                 if (!cacheHit)
                     return null;
 
-                var releases = trackerCache.Queries[queryHash].Results;
+                var releases = cachedQuery.Results;
                 _logger.Debug($"CACHE Search Hit / Indexer: {trackerCache.TrackerId} / Found: {releases.Count} releases");
 
-                return releases;
+                // Consumers may rewrite download links or other fields. Never expose the cache's objects.
+                return releases.Select(r => (ReleaseInfo)r.Clone()).ToList();
             }
         }
 
@@ -169,6 +180,7 @@ namespace Jackett.Common.Services
                     return;
 
                 _cache.Clear();
+                _nextPrune = DateTime.MinValue;
                 _logger.Debug("CACHE CleanCache");
             }
         }
@@ -207,22 +219,36 @@ namespace Jackett.Common.Services
             }
         }
 
+        private void PruneCacheIfDue()
+        {
+            var now = DateTime.Now;
+            if (now < _nextPrune)
+                return;
+            PruneCacheByTtl();
+            _nextPrune = now.AddSeconds(60);
+        }
+
         private void PruneCacheByMaxResultsPerIndexer(TrackerCache trackerCache)
         {
-            // Remove queries exceeding max results per indexer
-            var resultsPerQuery = trackerCache.Queries
-                .OrderByDescending(q => q.Value.Created) // newest first
-                .Select(q => new Tuple<string, int>(q.Key, q.Value.Results.Count)).ToList();
+            var expirationDate = DateTime.Now.AddSeconds(-_serverConfig.CacheTtl);
+            foreach (var key in trackerCache.Queries.Where(q => q.Value.Created < expirationDate).Select(q => q.Key).ToList())
+                trackerCache.Queries.Remove(key);
 
+            var total = trackerCache.Queries.Values.Sum(q => (long)q.Results.Count);
+            var maxResults = Math.Max(0, _serverConfig.CacheMaxResultsPerIndexer);
+            // Empty searches consume memory too; bound their count as well as release count.
+            var maxQueries = Math.Max(1, maxResults);
+            if (total <= maxResults && trackerCache.Queries.Count <= maxQueries)
+                return;
+
+            var oldestFirst = trackerCache.Queries.OrderBy(q => q.Value.Created).ToList();
             var prunedCounter = 0;
-            while (true)
+            foreach (var query in oldestFirst)
             {
-                var total = resultsPerQuery.Select(q => q.Item2).Sum();
-                if (total <= _serverConfig.CacheMaxResultsPerIndexer)
+                if (total <= maxResults && trackerCache.Queries.Count <= maxQueries)
                     break;
-                var olderQuery = resultsPerQuery.Last();
-                trackerCache.Queries.Remove(olderQuery.Item1); // remove the older
-                resultsPerQuery.Remove(olderQuery);
+                total -= query.Value.Results.Count;
+                trackerCache.Queries.Remove(query.Key);
                 prunedCounter++;
             }
 
@@ -233,7 +259,7 @@ namespace Jackett.Common.Services
             }
         }
 
-        private static string GetQueryHash(TorznabQuery query)
+        internal static string GetQueryHash(TorznabQuery query)
         {
             var json = GetSerializedQuery(query);
 
@@ -253,6 +279,8 @@ namespace Jackett.Common.Services
 
         private void PrintCacheStatus()
         {
+            if (!_logger.IsDebugEnabled)
+                return;
             _logger.Debug($"CACHE Status / Total cached results: {_cache.Values.SelectMany(tc => tc.Queries).Select(q => q.Value.Results.Count).Sum()}");
         }
     }

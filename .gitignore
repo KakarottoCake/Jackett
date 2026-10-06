@@ -205,3 +205,7 @@ launchSettings.json
 # Claude Code
 .claude/
 CLAUDE.local.md
+
+# Local tooling, server snapshots and credentials
+.local/
+__pycache__/

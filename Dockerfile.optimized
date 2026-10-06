@@ -1,0 +1,18 @@
+ARG JACKETT_BASE=lscr.io/linuxserver/jackett:latest
+FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS source
+WORKDIR /src
+COPY src/ ./src/
+COPY README.md LICENSE ./
+RUN dotnet restore src/Jackett.Test/Jackett.Test.csproj -p:TargetFrameworks=net9.0
+
+FROM source AS test
+RUN dotnet test src/Jackett.Test/Jackett.Test.csproj -c Release -f net9.0 -p:TargetFrameworks=net9.0 --no-restore --logger 'console;verbosity=minimal'
+
+FROM test AS publish
+ARG JACKETT_VERSION=0.24.0
+RUN dotnet publish src/Jackett.Server/Jackett.Server.csproj -m:1 -c Release -f net9.0 -r linux-musl-x64 --self-contained true -p:TargetFrameworks=net9.0 -p:Version=${JACKETT_VERSION} -p:InformationalVersion=${JACKETT_VERSION}-optimized -o /out
+
+FROM ${JACKETT_BASE} AS optimized
+COPY --from=publish /out/ /app/Jackett/
+# Keep the configured LinuxServer entrypoint, user, mounts, networks and ports.
+ENV AUTO_UPDATE=false

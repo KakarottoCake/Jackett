@@ -3,7 +3,7 @@
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta charset="utf-8" />
@@ -13,18 +13,18 @@
     <link rel="mask-icon" href="../jackett_medium.png" color="#35c5f4">
     <link rel="icon" type="image/ico" href="../favicon.ico" />
     <link rel='shortcut icon' type='image/x-icon' href='../favicon.ico' />
-    <script type="text/javascript" src="../libs/filesize.min.js?changed=2017083001"></script>
-    <script type="text/javascript" src="../libs/jquery.min.js?changed=13019"></script>
-    <script type="text/javascript" src="../libs/jquery.dataTables.min.js?changed=2017083001" charset="utf8"></script>
-    <script type="text/javascript" src="../libs/handlebars.min.js?changed=2017083001"></script>
-    <script type="text/javascript" src="../libs/moment.min.js?changed=2017083001"></script>
-    <script type="text/javascript" src="../libs/handlebarsmoment.js?changed=20210117"></script>
-    <script type="text/javascript" src="../libs/handlebarsextend.js?changed=2017083001"></script>
-    <script type="text/javascript" src="../bootstrap/bootstrap.min.js?changed=2017083001"></script>
-    <script type="text/javascript" src="../libs/bootstrap-notify.js?changed=2017083001"></script>
-    <script type="text/javascript" src="../libs/bootstrap-multiselect.js?changed=20230107001"></script>
-    <script type="text/javascript" src="../libs/tagify.min.js?changed=11662"></script>
-    <script type="text/javascript" src="../libs/jQuery.tagify.min.js?changed=11662"></script>
+    <script defer type="text/javascript" src="../libs/filesize.min.js?changed=2017083001"></script>
+    <script defer type="text/javascript" src="../libs/jquery.min.js?changed=13019"></script>
+    <script defer type="text/javascript" src="../libs/jquery.dataTables.min.js?changed=2017083001" charset="utf8"></script>
+    <script defer type="text/javascript" src="../libs/handlebars.min.js?changed=2017083001"></script>
+    <script defer type="text/javascript" src="../libs/moment.min.js?changed=2017083001"></script>
+    <script defer type="text/javascript" src="../libs/handlebarsmoment.js?changed=20210117"></script>
+    <script defer type="text/javascript" src="../libs/handlebarsextend.js?changed=2017083001"></script>
+    <script defer type="text/javascript" src="../bootstrap/bootstrap.min.js?changed=2017083001"></script>
+    <script defer type="text/javascript" src="../libs/bootstrap-notify.js?changed=2017083001"></script>
+    <script defer type="text/javascript" src="../libs/bootstrap-multiselect.js?changed=20230107001"></script>
+    <script defer type="text/javascript" src="../libs/tagify.min.js?changed=11662"></script>
+    <script defer type="text/javascript" src="../libs/jQuery.tagify.min.js?changed=11662"></script>
 
     <link rel="stylesheet" type="text/css" href="../bootstrap/bootstrap.min.css?changed=2017083001">
     <link rel="stylesheet" type="text/css" href="../animate.css?changed=2017083001">
@@ -34,7 +34,8 @@
     <link rel="stylesheet" type="text/css" href="../css/jquery.dataTables.min.css?changed=2017083001">
     <link rel="stylesheet" type="text/css" href="../css/bootstrap-multiselect.css?changed=20230107001" />
     <link rel="stylesheet" type="text/css" href="../css/font-awesome.min.css?changed=2017083001">
-    <title>Jackett</title>
+    <link rel="stylesheet" href="../dashboard.css?changed=20261006001">
+    <title>Jackett · Dashboard</title>
 </head>
 <body>
     <div id="page">
@@ -48,7 +49,13 @@
                 <span class="glyphicon glyphicon-copy" aria-hidden="true"></span>
             </button>
         </div>
-        <hr />
+        <p class="dashboard-subtitle">Your indexers. One place to search.</p>
+        <div class="dashboard-overview" aria-live="polite">
+            <div class="dashboard-metric"><span>Configured indexers</span><strong id="dashboard-count">—</strong></div>
+            <div class="dashboard-metric"><span>Search cache</span><strong id="dashboard-cache">—</strong></div>
+            <div class="dashboard-metric"><span>Dashboard load</span><strong id="dashboard-load">—</strong></div>
+            <div class="dashboard-metric"><span>Status</span><strong id="dashboard-status">Connecting…</strong></div>
+        </div>
 
         <div id="warning-external-access" hidden class="alert alert-danger text-center" role="alert">
             <strong>
@@ -86,9 +93,11 @@
             </button>
         </div>
         <h3>Configured Indexers</h3>
-        <div id="indexers"></div>
+        <div id="indexers"><p class="dashboard-subtitle">Loading configured indexers…</p></div>
         <hr />
 
+        <details class="dashboard-details">
+            <summary>Connect your apps</summary>
         <div class="input-area">
             <h4>Adding a Jackett indexer in Sonarr or Radarr</h4>
             <ol>
@@ -114,7 +123,9 @@
             </ol>
         </div>
         <hr />
-        <h3>Jackett Configuration</h3>
+        </details>
+        <details class="dashboard-details">
+        <summary>Server settings &amp; logs</summary>
         <div class="text-center">
             <div class="btn-toolbar">
                 <button id="change-jackett-port" class="btn btn-primary btn-sm">
@@ -242,6 +253,7 @@
             <input id="jackett-omdburl" class="form-control input-right" type="text" value="" placeholder="Blank for default">
         </div>
         <hr />
+        </details>
         <div id="footer">
             <a href="https://github.com/Jackett/Jackett" target="_blank" title="Jackett on GitHub">Jackett</a> Version <span id="app-version"></span>
         </div>
@@ -796,7 +808,7 @@
         <span class="fa fa-search"></span>
     </script>
 
-    <script type="text/javascript" src="../libs/api.js?changed=2017083001"></script>
-    <script type="text/javascript" src="../custom.js?changed=20240420v1"></script>
+    <script defer type="text/javascript" src="../libs/api.js?changed=20261006001"></script>
+    <script defer type="text/javascript" src="../custom.js?changed=20261006001"></script>
 </body>
 </html>
