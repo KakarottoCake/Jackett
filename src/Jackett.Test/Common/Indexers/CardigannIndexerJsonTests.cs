@@ -1,12 +1,17 @@
 using System.Linq;
+using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using Jackett.Common.Indexers.Definitions;
 using Jackett.Common.Models;
+using Jackett.Common;
+using Jackett.Common.Utils.Clients;
 using Jackett.Test.TestHelpers;
 using NLog;
 using NUnit.Framework;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using WebRequest = Jackett.Common.Utils.Clients.WebRequest;
 
 // todo: test download block
 // todo: test login block
@@ -21,6 +26,32 @@ namespace Jackett.Test.Common.Indexers
         private readonly TestWebClient _webClient = new TestWebClient();
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly TestCacheService _cacheService = new TestCacheService();
+
+        private class UnauthorizedWebClient : TestWebClient
+        {
+            private readonly string _body;
+            public UnauthorizedWebClient(string body) => _body = body;
+            public override Task<WebResult> GetResultAsync(WebRequest request) => Task.FromResult(new WebResult
+            {
+                Request = request,
+                Status = HttpStatusCode.Unauthorized,
+                ContentBytes = Encoding.UTF8.GetBytes(_body)
+            });
+        }
+
+        [TestCase("<!doctype html><html><style>large error page</style><body>Unauthorized</body></html>")]
+        [TestCase("{\"message\":\"Unauthenticated.\",\"private_detail\":\"do not expose this response\"}")]
+        public void UnauthorizedResponseReportsAuthenticationFailureWithoutDumpingResponseBody(string body)
+        {
+            var indexer = new CardigannIndexer(null, new UnauthorizedWebClient(body), _logger, null,
+                _cacheService, LoadTestDefinition("json-definition1.yml"));
+            var exception = Assert.ThrowsAsync<IndexerException>(async () =>
+                await indexer.ResultsForQuery(new TorznabQuery { QueryType = "search", SearchTerm = "1080p" }, false));
+            Assert.That(exception.Message, Does.Contain("Authentication failed (HTTP 401 Unauthorized)"));
+            Assert.That(exception.Message, Does.Contain("Configure"));
+            Assert.That(exception.Message, Does.Not.Contain(body));
+            Assert.That(exception.Message.Length, Is.LessThan(350));
+        }
 
         [Test]
         public async Task TestCardigannJsonAsync()

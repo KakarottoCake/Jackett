@@ -10,6 +10,7 @@ This fork keeps the existing Jackett API routes and response formats. Its dashbo
 - Responses receive independent release objects and collection fields, so proxy-link rewriting cannot corrupt cached results or another client's response.
 - Versioned JavaScript and CSS can be reused from the browser cache. Scripts defer execution until the document is parsed.
 - Release labels and tooltips initialize for the displayed table page. Search preset buttons replace their existing click handler instead of accumulating handlers during redraws.
+- JSON indexer HTTP 401 responses produce a short authentication error without embedding the tracker's response body. The dashboard directs users to Configure rather than opening a parser-bug report for rejected credentials.
 
 Live searches still depend on tracker response times and use network, CPU and memory. Cached searches avoid tracker requests; this fork does not promise zero resource usage or eliminate delays imposed by remote trackers.
 
@@ -27,7 +28,7 @@ October 6, 2026, Ubuntu x86-64, approximately 8 GB RAM, nine configured indexers
 
 Samples describe this server and workload, not guarantees. The two search timings compare cold and cached requests, rather than proving a speedup over the original cache. Memory samples were taken at different points in the services' lifetimes.
 
-All 263 .NET 9 regression tests passed, including 13 new tests for cache isolation, expiry, eviction, empty-query limits, query separation, concurrent request sharing, explicit bypasses and failure retries. JavaScript syntax checks and Git whitespace checks passed.
+All 265 .NET 9 regression tests passed, including 15 new tests for cache isolation, expiry, eviction, empty-query limits, query separation, concurrent request sharing, explicit bypasses, failure retries and concise authentication errors for HTML and JSON responses. JavaScript syntax checks, authentication-notification guidance checks and Git whitespace checks passed.
 
 The deployed instance passed health, login, dashboard, configured-indexer, capabilities, legacy Torznab route, cache display, catalog and manual search checks. Sonarr Pro parsed 230 releases from its existing integrations. FileList, Nyaa and TorrentLeech indexer tests passed after deployment. Blutopia failed both before and after deployment because its upstream API returned HTTP 401 Unauthorized for its configured credentials; a working Blutopia API token is needed to resolve that failure.
 

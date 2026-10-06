@@ -1632,6 +1632,11 @@ namespace Jackett.Common.Indexers.Definitions
                         results = response.ContentString;
                     }
 
+                    if (response.Status == HttpStatusCode.Unauthorized)
+                    {
+                        throw new Exception($"Authentication failed (HTTP 401 Unauthorized). {Name} rejected the configured credentials. Check this indexer's API key or login details in Configure, then test again.");
+                    }
+
                     if (response.Status != HttpStatusCode.OK)
                     {
                         throw new Exception($"Error Parsing Json Response: Status={response.Status} Response={results}");

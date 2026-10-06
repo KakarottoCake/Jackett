@@ -932,6 +932,9 @@ function doErrorNotify(indexerId, errorMessage, errorEvent) {
     var htmlEscapedError = $("<div>").text(errorMessage.substring(0, indexEnd)).html();
     var urlEscapedError = encodeURIComponent(errorMessage.substring(0, indexEnd));
     var link = "<i><a href=\"" + githubUrl + " " + urlEscapedError + "\" target=\"_blank\">Click here to open an issue on GitHub for " + githubText + ".</a><i>";
+    if (errorMessage.includes('Authentication failed (HTTP 401 Unauthorized)')) {
+      link = 'Open this indexer’s <b>Configure</b> dialog and check its API key or login details. If the key was revoked or expired, generate a replacement on the tracker website.';
+    }
     if (errorMessage.includes("FlareSolverr is not configured")) {
       link = "<i><a href=\"https://github.com/Jackett/Jackett#configuring-flaresolverr\" target=\"_blank\">Instructions to install and configure FlareSolverr.</a><i><br />" +
         "<i><a href=\"https://github.com/Jackett/Jackett/wiki/Troubleshooting#error-connecting-to-flaresolverr-server\" target=\"_blank\">Troubleshooting frequent errors with FlareSolverr.</a><i>";
